@@ -1,5 +1,5 @@
 //
-//  ContentView.swift
+//  ContentViewTestable.swift
 //  pomodorov1
 //
 //  Created by Paolo Miguel Imperio on 4/5/25.
@@ -8,14 +8,13 @@
 import SwiftUI
 
 /// A Pomodoro timer view with work sessions, short breaks, long breaks, and basic category tracking
-struct ContentView: View {
+struct ContentViewTestable: View {
     /// Represents the current state of the timer
     enum TimerState {
         case work       // Timer is running for work session
         case shortBreak // Timer is running for short break session
         case longBreak  // Timer is running for long break session
         case paused     // Timer is paused
-        case completed
     }
     
     // MARK: - Timer Configuration
@@ -30,27 +29,27 @@ struct ContentView: View {
     
     // MARK: - State Properties
     /// Tracks remaining time for current session
-    @State private var timeRemaining: TimeInterval
+    @State var timeRemaining: TimeInterval
     /// Current operational state of the timer
-    @State private var timerState: TimerState = .paused
+    @State var timerState: TimerState = .paused
     /// Reference to the timer object
-    @State private var timer: Timer? = nil
+    @State var timer: Timer? = nil
     /// Last time the timer fired (for precise time tracking)
-    @State private var lastFireDate: Date? = nil
+    @State var lastFireDate: Date? = nil
     /// Tracks whether current session should be work or break
-    @State private var currentSessionType: TimerState = .work
+    @State var currentSessionType: TimerState = .work
     /// Counts completed work sessions for long break scheduling
-    @State private var completedWorkSessions = 0
+    @State var completedWorkSessions = 0
     
     // MARK: - Category Tracking
     /// Dictionary tracking time spent per category
-    @State private var categories: [String: TimeInterval] = ["General": 0]
+    @State var categories: [String: TimeInterval] = ["General": 0]
     /// Currently selected category for work sessions
-    @State private var selectedCategory = "General"
+    @State var selectedCategory = "General"
     /// Controls the display of the add category alert
-    @State private var showingAddCategoryAlert = false
+    @State var showingAddCategoryAlert = false
     /// New category name during creation
-    @State private var newCategoryName = ""
+    @State var newCategoryName = ""
     
     init() {
         // Initialize timeRemaining with work duration
@@ -95,11 +94,11 @@ struct ContentView: View {
                 .font(.system(size: 64, weight: .bold))
                 .padding()
             
-            // MARK: - Control Buttons
+            // Control buttons
             HStack(spacing: 20) {
-                if timerState == .paused || timerState == .completed {
+                if timerState == .paused {
                     if currentSessionType == .work {
-                        Button(action: initiateWorkSession) {
+                        Button(action: startOrResumeTimer) {
                             Text(timeRemaining == workDuration ? "Start Work" : "Resume")
                                 .padding()
                                 .background(Color.green)
@@ -107,7 +106,7 @@ struct ContentView: View {
                                 .cornerRadius(10)
                         }
                     } else {
-                        Button(action: initiateBreakSession) {
+                        Button(action: startBreak) {
                             Text(currentSessionType == .longBreak ? "Start Long Break" : "Start Short Break")
                                 .padding()
                                 .background(Color.blue)
@@ -168,174 +167,105 @@ struct ContentView: View {
     }
     
     /// Provides descriptive text for current timer state
-        var stateDescription: String {
-            switch (timerState, currentSessionType) {
-            case (.paused, .work):
-                return timeRemaining == workDuration ? "Ready to Start" : "Paused"
-            case (.completed, .work):
-                return "Break Complete - Ready for Work"
-            case (.completed, .shortBreak):
+    var stateDescription: String {
+        if timerState == .paused {
+            if currentSessionType == .shortBreak {
                 return "Work Complete - Ready for Short Break"
-            case (.completed, .longBreak):
+            } else if currentSessionType == .longBreak {
                 return "Work Complete - Ready for Long Break"
-            case (.work, _):
-                return "Work Time - Stay Focused!"
-            case (.shortBreak, _):
-                return "Short Break - Relax!"
-            case (.longBreak, _):
-                return "Long Break - Recharge!"
-            default:
-                return ""
             }
+            return timeRemaining == workDuration ? "Ready to Start" : "Paused"
         }
-    // MARK: - Timer Control Methods
-    
-    func initiateWorkSession() {
-            timerState = .work
-            configureTimerState(for: .work)
-            startTimer()
-        }
-        
-        /// Initiates the appropriate break session
-        func initiateBreakSession() {
-            let breakType = determineNextBreakType()
-            timerState = breakType
-            configureTimerState(for: breakType)
-            updateTimeRemaining(for: breakType)
-            startTimer()
-        }
-        
-        // MARK: - Timer Configuration
-        
-         func configureTimerState(for state: TimerState) {
-            timerState = state
-            lastFireDate = Date()
-        }
-        
-         func updateTimeRemaining(for state: TimerState) {
-            switch state {
-            case .work:
-                timeRemaining = workDuration
-            case .shortBreak:
-                timeRemaining = shortBreakDuration
-            case .longBreak:
-                timeRemaining = longBreakDuration
-            case .paused:
-                break
-            case .completed:
-                break
-            }
-        }
-        
-        // MARK: - Break Session Logic
-        
-         func determineNextBreakType() -> TimerState {
-            return completedWorkSessions >= workSessionsBeforeLongBreak ? .longBreak : .shortBreak
-        }
-        
-        // MARK: - Timer Operation
-        
-        /// Manages precise timer countdown and session transitions
-         func startTimer() {
-            invalidateExistingTimer()
-            
-            timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
-                self.updateTimerCountdown()
-            }
-        }
-        
-         func invalidateExistingTimer() {
-            timer?.invalidate()
-            timer = nil
-        }
-        
-         func updateTimerCountdown() {
-            guard let lastFireDate = lastFireDate else { return }
-            
-            // Calculate precise elapsed time
-            let elapsedTime = Date().timeIntervalSince(lastFireDate)
-            self.lastFireDate = Date()
-            
-            // Update remaining time
-            timeRemaining = max(0, timeRemaining - elapsedTime)
-            
-            handleTimerCompletionIfNeeded()
-        }
-        
-        // MARK: - Session Completion
-        
-    func handleTimerCompletionIfNeeded() {
-        guard timeRemaining <= 0 else { return }
-        
-        invalidateExistingTimer()
-        timerState = .completed
         
         switch currentSessionType {
-        case .work:
-            logWorkTimeToCategory()
-            advanceSessionCount()
-            transitionToBreak()
-            
-        case .shortBreak, .longBreak:
-            if currentSessionType == .longBreak {
-                resetSessionCount()
-            }
-            prepareForNewWorkSession()
-            
-        case .paused, .completed:
-            break
+        case .work: return "Work Time - Stay Focused!"
+        case .shortBreak: return "Short Break - Relax!"
+        case .longBreak: return "Long Break - Recharge!"
+        case .paused: return "Paused"
         }
     }
 
+    // MARK: - Timer Control Methods
+    
+    /// Starts or resumes the timer based on current state
+    func startOrResumeTimer() {
+        lastFireDate = Date()
+        currentSessionType = .work
+        timerState = .work
+        startTimer()
+    }
+    
+    /// Starts the appropriate break timer (short or long)
+    func startBreak() {
+        let isLongBreak = completedWorkSessions >= workSessionsBeforeLongBreak
+        currentSessionType = isLongBreak ? .longBreak : .shortBreak
+        timerState = isLongBreak ? .longBreak : .shortBreak
+        timeRemaining = isLongBreak ? longBreakDuration : shortBreakDuration
+        lastFireDate = Date()
+        startTimer()
+    }
+    
+    /// Begins the countdown timer with precise time tracking
+    func startTimer() {
+        // Invalidate any existing timer
+        timer?.invalidate()
         
-         func logWorkTimeToCategory() {
-            let timeSpent = workDuration - timeRemaining
-            categories[selectedCategory] = (categories[selectedCategory] ?? 0) + timeSpent
-        }
-        
-         func advanceSessionCount() {
-            completedWorkSessions += 1
-        }
-        
-         func transitionToBreak() {
-            timerState = .completed
-            currentSessionType = determineNextBreakType()
-            updateTimeRemaining(for: currentSessionType)
-        }
-        
-         /*func resetAfterBreak() {
-            if currentSessionType == .longBreak {
-                resetSessionCount()
+        // Start new timer with 0.1 second precision
+        timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
+            guard let lastFireDate = lastFireDate else { return }
+            
+            // Calculate exact time elapsed since last update
+            let elapsed = Date().timeIntervalSince(lastFireDate)
+            self.lastFireDate = Date()
+            
+            // Update remaining time
+            self.timeRemaining = max(0, self.timeRemaining - elapsed)
+            
+            // Handle timer completion
+            if self.timeRemaining <= 0 {
+                self.timer?.invalidate()
+                
+                switch self.currentSessionType {
+                case .work:
+                    // Log time to current category
+                    let timeSpent = self.workDuration - self.timeRemaining
+                    self.categories[self.selectedCategory] = (self.categories[self.selectedCategory] ?? 0) + timeSpent
+                    
+                    self.completedWorkSessions += 1
+                    self.timerState = .paused
+                    self.currentSessionType = self.completedWorkSessions >= self.workSessionsBeforeLongBreak ?
+                        .longBreak : .shortBreak
+                    
+                case .shortBreak, .longBreak:
+                    if self.currentSessionType == .longBreak {
+                        self.completedWorkSessions = 0
+                    }
+                    self.timerState = .paused
+                    self.currentSessionType = .work
+                    self.timeRemaining = self.workDuration
+                    
+                case .paused: break
+                }
             }
-            prepareForNewWorkSession()
-        }*/
-        
-         func resetSessionCount() {
-            completedWorkSessions = 0
-        }
-        
-         func prepareForNewWorkSession() {
-            timerState = .completed
-            currentSessionType = .work
-            timeRemaining = workDuration
-        }
-        
-        // MARK: - Control Actions
-        
-        /// Pauses the currently running timer
-        func pauseTimer() {
-            invalidateExistingTimer()
-            timerState = .paused
-            lastFireDate = nil
-        }
-        
-        /// Resets all timer state to initial conditions
-        func resetTimer() {
-            invalidateExistingTimer()
-            timerState = .paused
-            currentSessionType = .work
-            timeRemaining = workDuration
-            lastFireDate = nil
-            completedWorkSessions = 0
         }
     }
+    
+    /// Pauses the running timer
+    func pauseTimer() {
+        timer?.invalidate()
+        timerState = .paused
+        lastFireDate = nil
+    }
+    
+    /// Resets the timer to initial work state
+    func resetTimer() {
+        timer?.invalidate()
+        timerState = .paused
+        currentSessionType = .work
+        timeRemaining = workDuration
+        lastFireDate = nil
+        completedWorkSessions = 0
+    }
+}
+
+
